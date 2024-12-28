@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "API_Hotels": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7230"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker",
+      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
+      "httpPort": 34102,
+      "useSSL": false
+    }
+  }
+}
