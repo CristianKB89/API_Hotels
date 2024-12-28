@@ -19,6 +19,90 @@ namespace API_Hotels.Repositories
             _context = dapperContext;
         }
 
+        public async Task AddEmergencyContact(Guid reservationId, AddEmergencyContactRequestInput emergencyContactRequest)
+        {
+            using IDbConnection db = _context.CreateConnection();
+            try
+            {
+                if (db.State == ConnectionState.Closed)
+                    db.Open();
+
+                const string queryGetGuestId = @"SELECT TOP 1 GuestId
+                                             FROM Guests
+                                             WHERE ReservationId = @ReservationId;"
+                ;
+
+                var guestId = await db.ExecuteScalarAsync<Guid?>(queryGetGuestId, new { ReservationId = reservationId });
+
+                if (guestId == null)
+                {
+                    throw new Exception($"No guest found for ReservationId: {reservationId}");
+                }
+
+                const string queryInsertEmergencyContact = @"INSERT INTO EmergencyContacts (ContactId, GuestId, FullName, Phone, Relationship)
+                                                          VALUES (@ContactId, @GuestId, @FullName, @Phone, @Relationship);";
+
+                var insertParameters = new DynamicParameters();
+                insertParameters.Add("@ContactId", Guid.NewGuid(), DbType.Guid);
+                insertParameters.Add("@GuestId", guestId, DbType.Guid);
+                insertParameters.Add("@FullName", emergencyContactRequest.FullName, DbType.String);
+                insertParameters.Add("@Phone", emergencyContactRequest.Phone, DbType.String);
+                insertParameters.Add("@Relationship", emergencyContactRequest.Relationship, DbType.String);
+
+                await db.ExecuteAsync(queryInsertEmergencyContact, insertParameters);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error adding emergency contact for reservation with ID: {reservationId}", ex);
+            }
+            finally
+            {
+                if (db.State == ConnectionState.Open)
+                    db.Close();
+            }
+        }
+
+        public async Task AddGuestsToReservation(Guid reservationId, int numberOfAdditionalGuests)
+        {
+            using IDbConnection db = _context.CreateConnection();
+            try
+            {
+                if (db.State == ConnectionState.Closed)
+                    db.Open();
+
+                const string queryCheckReservation = @"SELECT TotalGuests
+                                                        FROM Reservations
+                                                       WHERE ReservationId = @ReservationId;";
+
+                const string queryUpdateGuests = @"UPDATE Reservations
+                                                    SET TotalGuests = TotalGuests + @NumberOfAdditionalGuests
+                                                   WHERE ReservationId = @ReservationId;";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("@ReservationId", reservationId, DbType.Guid);
+                parameters.Add("@NumberOfAdditionalGuests", numberOfAdditionalGuests, DbType.Int32);
+
+                /// Verificar si la reserva existe
+                int? currentNumberOfGuests = await db.ExecuteScalarAsync<int?>(queryCheckReservation, parameters);
+                if (currentNumberOfGuests == null)
+                {
+                    throw new Exception($"Reservation with ID: {reservationId} not found.");
+                }
+
+                /// Actualizar el número de huéspedes
+                await db.ExecuteAsync(queryUpdateGuests, parameters);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error adding guests to reservation with ID: {reservationId}", ex);
+            }
+            finally
+            {
+                if (db.State == ConnectionState.Open)
+                    db.Close();
+            }
+        }
+
         public async Task<Guid> AddRoomToHotel(Guid hotelId, AddRoomRequestInput roomData)
         {
             using IDbConnection db = _context.CreateConnection();
@@ -91,6 +175,99 @@ namespace API_Hotels.Repositories
             }
         }
 
+        public async Task CreateReservation(CreateReservationRequestInput reservationData)
+        {
+            using IDbConnection db = _context.CreateConnection();
+            try
+            {
+                if (db.State == ConnectionState.Closed)
+                    db.Open();
+
+                const string checkRoomQuery = @" SELECT COUNT(1)
+                                                 FROM Rooms r
+                                                 WHERE r.RoomId = @RoomId
+                                                    AND r.HotelId = @HotelId
+                                                    AND r.Status = 1;";
+
+                const string checkAvailabilityQuery = @"SELECT COUNT(1)
+                                                FROM Reservations res
+                                                WHERE res.RoomId = @RoomId
+                                                    AND NOT (@CheckOutDate <= res.CheckInDate OR @CheckInDate >= res.CheckOutDate);";
+
+                const string createReservationQuery = @"INSERT INTO Reservations (ReservationId, RoomId, CheckInDate, CheckOutDate, TotalGuests, CreatedAt, TotalCost, EmailNotification)
+                                                        VALUES (@ReservationId, @RoomId, @CheckInDate, @CheckOutDate, @TotalGuests, @CreatedAt, @TotalCost, @EmailNotification);";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("@RoomId", reservationData.RoomId, DbType.Guid);
+                parameters.Add("@HotelId", reservationData.HotelId, DbType.Guid);
+                parameters.Add("@CheckInDate", reservationData.CheckInDate, DbType.DateTime);
+                parameters.Add("@CheckOutDate", reservationData.CheckOutDate, DbType.DateTime);
+
+                /// Verificar que la habitación pertenece al hotel y está activa
+                int roomExists = await db.ExecuteScalarAsync<int>(checkRoomQuery, parameters);
+                if (roomExists == 0)
+                {
+                    throw new Exception("The specified room does not exist or does not belong to the specified hotel.");
+                }
+
+                /// Verificar disponibilidad de la habitación en las fechas especificadas
+                int conflicts = await db.ExecuteScalarAsync<int>(checkAvailabilityQuery, parameters);
+                if (conflicts > 0)
+                {
+                    throw new Exception("The room is not available for the selected dates.");
+                }
+
+                /// Crear la reserva
+                parameters.Add("@ReservationId", Guid.NewGuid(), DbType.Guid);
+                parameters.Add("@GuestName", reservationData.GuestName, DbType.String);
+                parameters.Add("@TotalGuests", reservationData.NumberOfGuests, DbType.Int32);
+                parameters.Add("@TotalCost", 500, DbType.Decimal);
+                parameters.Add("@EmailNotification", true, DbType.Boolean);
+                parameters.Add("@CreatedAt", DateTime.UtcNow, DbType.DateTime);
+
+                await db.ExecuteAsync(createReservationQuery, parameters);
+
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error creating reservation", ex);
+            }
+            finally
+            {
+                if (db.State == ConnectionState.Open)
+                    db.Close();
+            }
+        }
+
+        public async Task<List<Guests>> GetGuestsByReservation(Guid reservationId)
+        {
+            using IDbConnection db = _context.CreateConnection();
+            try
+            {
+                if (db.State == ConnectionState.Closed)
+                    db.Open();
+
+                const string query = @"SELECT g.GuestId, g.ReservationId, g.FullName, g.DateOfBirth, g.Gender, g.DocumentType, g.DocumentNumber, g.Email, g.Phone
+                                            FROM Guests g
+                                            WHERE g.ReservationId = @ReservationId;";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("@ReservationId", reservationId, DbType.Guid);
+
+                var guests = await db.QueryAsync<Guests>(query, parameters);
+                return guests.AsList();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error retrieving guests for reservation with ID: {reservationId}", ex);
+            }
+            finally
+            {
+                if (db.State == ConnectionState.Open)
+                    db.Close();
+            }
+        }
+
         public async Task<Hotels> GetHotelById(Guid hotelId)
         {
             using IDbConnection db = _context.CreateConnection();
@@ -145,6 +322,65 @@ namespace API_Hotels.Repositories
             }
         }
 
+        public async Task<Reservations> GetReservationDetails(Guid reservationId)
+        {
+            using IDbConnection db = _context.CreateConnection();
+            try
+            {
+                if (db.State == ConnectionState.Closed)
+                    db.Open();
+
+                const string query = @"SELECT r.ReservationId, r.RoomId, r.CheckInDate, r.CheckOutDate, r.TotalGuests, r.TotalCost, r.EmailNotification, r.CreatedAt
+                                            FROM Reservations r
+                                            WHERE r.ReservationId = @ReservationId;";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("@ReservationId", reservationId, DbType.Guid);
+
+                return await db.QuerySingleOrDefaultAsync<Reservations>(query, parameters);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error retrieving details for reservation with ID: {reservationId}", ex);
+            }
+            finally
+            {
+                if (db.State == ConnectionState.Open)
+                    db.Close();
+            }
+        }
+
+        public async Task<List<Reservations>> GetReservationsByHotel(Guid hotelId)
+        {
+            using IDbConnection db = _context.CreateConnection();
+            try
+            {
+                if (db.State == ConnectionState.Closed)
+                    db.Open();
+
+                const string query = @"SELECT r.ReservationId, r.RoomId, r.CheckInDate, r.CheckOutDate, r.TotalGuests, r.TotalCost, r.EmailNotification, r.CreatedAt
+                                                FROM Reservations r
+                                                INNER JOIN Rooms rm ON r.RoomId = rm.RoomId
+                                                WHERE rm.HotelId = @HotelId
+                                                ORDER BY r.CheckInDate;";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("@HotelId", hotelId, DbType.Guid);
+
+                var reservations = await db.QueryAsync<Reservations>(query, parameters);
+                return reservations.AsList();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error retrieving reservations for hotel with ID: {hotelId}", ex);
+            }
+            finally
+            {
+                if (db.State == ConnectionState.Open)
+                    db.Close();
+            }
+        }
+
         public async Task<List<Rooms>> GetRoomsByHotel(Guid hotelId)
         {
             using IDbConnection db = _context.CreateConnection();
@@ -164,6 +400,46 @@ namespace API_Hotels.Repositories
             catch (Exception ex)
             {
                 throw new Exception($"Error retrieving rooms for hotel with ID: {hotelId}", ex);
+            }
+            finally
+            {
+                if (db.State == ConnectionState.Open)
+                    db.Close();
+            }
+        }
+
+        public async Task<List<Hotels>> SearchHotels(string city, DateTime checkInDate, DateTime checkOutDate, int numGuests)
+        {
+            using IDbConnection db = _context.CreateConnection();
+            try
+            {
+                if (db.State == ConnectionState.Closed)
+                    db.Open();
+
+                const string query = @"SELECT h.HotelId, h.Name, h.Location, h.BasePrice, h.Status, h.CreatedAt, h.UpdatedAt
+                                        FROM Hotels h
+                                        WHERE (@City IS NULL OR h.Location = @City)
+                                          AND h.Status = 1
+                                          AND EXISTS (
+                                              SELECT 1
+                                              FROM Rooms r
+                                              WHERE r.HotelId = h.HotelId
+                                                AND r.Status = 1
+                                          )
+                                        ORDER BY h.Name;";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("@City", string.IsNullOrWhiteSpace(city) ? null : city, DbType.String);
+                parameters.Add("@CheckInDate", checkInDate, DbType.DateTime);
+                parameters.Add("@CheckOutDate", checkOutDate, DbType.DateTime);
+                parameters.Add("@NumGuests", numGuests, DbType.Int32);
+
+                var hotels = await db.QueryAsync<Hotels>(query, parameters);
+                return hotels.AsList();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error searching for hotels", ex);
             }
             finally
             {
@@ -213,6 +489,9 @@ namespace API_Hotels.Repositories
             using IDbConnection db = _context.CreateConnection();
             try
             {
+                if (db.State == ConnectionState.Closed)
+                    db.Open();
+
                 const string updateQuery = @"UPDATE Rooms
                                 SET Status = ~Status, -- Toggles the boolean status (1 -> 0 or 0 -> 1)
                                     UpdatedAt = @UpdatedAt

@@ -31,7 +31,7 @@ namespace API_Hotels.Functions.ManagementHotels
         [OpenApiParameter(name: "hotelId", In = ParameterLocation.Path, Required = true, Type = typeof(Guid), Description = "The ID of the hotel to retrieve.")]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(Hotels), Description = "The hotel details.")]
         public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "hotels/{hotelId}")] HttpRequest req, ILogger log, Guid hotelId)
+            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "hotelsbyid/{hotelId}")] HttpRequest req, ILogger log, Guid hotelId)
         {
             log.LogInformation("Processing request to retrieve hotel with ID: {HotelId}", hotelId);
 

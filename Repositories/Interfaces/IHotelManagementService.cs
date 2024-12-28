@@ -20,5 +20,16 @@ namespace API_Hotels.Repositories.Interfaces
         Task UpdateRoom(Guid roomId, UpdateRoomRequestInput roomData);
         Task<bool> ToggleRoomStatus(Guid roomId);
         Task<List<Rooms>> GetRoomsByHotel(Guid hotelId);
+
+        /// Reservation Management Service
+        Task<List<Hotels>> SearchHotels(string city, DateTime checkInDate, DateTime checkOutDate, int numGuests);
+        Task CreateReservation(CreateReservationRequestInput reservationData);
+        Task<List<Reservations>> GetReservationsByHotel(Guid hotelId);
+        Task<Reservations> GetReservationDetails(Guid reservationId);
+
+        /// Guest Management Service
+        Task AddGuestsToReservation(Guid reservationId, int numberOfAdditionalGuests);
+        Task AddEmergencyContact(Guid reservationId, AddEmergencyContactRequestInput emergencyContactRequest);
+        Task<List<Guests>> GetGuestsByReservation(Guid reservationId);
     }
 }

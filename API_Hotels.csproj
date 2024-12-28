@@ -26,8 +26,4 @@
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Functions\ManagementReservations\" />
-    <Folder Include="Functions\ManagementGuests\" />
-  </ItemGroup>
 </Project>
