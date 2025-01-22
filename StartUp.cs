@@ -45,7 +45,7 @@ namespace API_Hotels
         {
             new OpenApiServer
             {
-                Url = "https://apihotels-production.up.railway.app",
+                Url = "https://apihotels-production.up.railway.app/api",
                 Description = "Production Server"
             }
         };
