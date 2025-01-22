@@ -33,7 +33,7 @@ namespace API_Hotels.Functions.ManagementReservations
         [OpenApiParameter(name: "numGuests", In = ParameterLocation.Query, Required = true, Type = typeof(int), Description = "The number of guests.")]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(List<Hotels>), Description = "The list of matching hotels.")]
 
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "get", Route = "hotels/search")] HttpRequest req, ILogger log)
+        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "hotels/search")] HttpRequest req, ILogger log)
         {
             log.LogInformation("Processing request to search hotels.");
 

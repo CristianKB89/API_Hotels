@@ -28,7 +28,7 @@ namespace API_Hotels.Functions.ManagementRooms
         [OpenApiParameter(name: "roomId", In = ParameterLocation.Path, Required = true, Type = typeof(Guid), Description = "The ID of the room to toggle.")]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(ResponseResult), Description = "The operation result.")]
         public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "patch", Route = "rooms/{roomId}/toggle-status")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "patch", Route = "rooms/{roomId}/toggle-status")] HttpRequest req,
             ILogger log, Guid roomId)
         {
             log.LogInformation("Processing request to toggle room status: {RoomId}", roomId);

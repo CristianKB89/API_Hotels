@@ -28,7 +28,7 @@ namespace API_Hotels.Functions.ManagementHotels
         [OpenApiOperation(operationId: "GetHotels", tags: new[] { "Hotels" }, Summary = "Retrieve all hotels", Description = "This endpoint retrieves a list of all hotels.")]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(List<Hotels>), Description = "The list of hotels.")]
         public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "hotels")] HttpRequest req, ILogger log)
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "hotels")] HttpRequest req, ILogger log)
         {
             log.LogInformation("Processing request to retrieve all hotels.");
 

@@ -24,7 +24,6 @@ namespace API_Hotels
 
             #endregion Repositories
 
-
         }
 
         public class OpenApiConfigurationOptions : DefaultOpenApiConfigurationOptions

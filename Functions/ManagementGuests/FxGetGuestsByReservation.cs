@@ -29,7 +29,7 @@ namespace API_Hotels.Functions.ManagementGuests
         [OpenApiParameter(name: "reservationId", In = ParameterLocation.Path, Required = true, Type = typeof(Guid), Description = "The ID of the reservation to retrieve guests for.")]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(List<Guests>), Description = "The list of guests.")]
 
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "get", Route = "reservations/{reservationId}/guests")] HttpRequest req, ILogger log, Guid reservationId)
+        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "reservations/{reservationId}/guests")] HttpRequest req, ILogger log, Guid reservationId)
         {
             log.LogInformation("Processing request to retrieve guests for reservation: {ReservationId}", reservationId);
 

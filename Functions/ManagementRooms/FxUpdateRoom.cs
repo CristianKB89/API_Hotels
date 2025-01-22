@@ -32,7 +32,7 @@ namespace API_Hotels.Functions.ManagementRooms
         [OpenApiRequestBody("application/json", typeof(UpdateRoomRequestInput), Description = "Updated room details", Required = true)]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(ResponseResult), Description = "The operation result.")]
 
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "put", Route = "rooms/{roomId}")] HttpRequest req, ILogger log, Guid roomId)
+        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "rooms/{roomId}")] HttpRequest req, ILogger log, Guid roomId)
         {
             log.LogInformation("Processing request to update room: {RoomId}", roomId);
 

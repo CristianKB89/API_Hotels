@@ -28,7 +28,7 @@ namespace API_Hotels.Functions.ManagementReservations
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(Reservations), Description = "The details of the reservation.")]
 
         public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "reservations/{reservationId}")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "reservations/{reservationId}")] HttpRequest req,
             ILogger log, Guid reservationId)
         {
             log.LogInformation("Processing request to retrieve reservation details: {ReservationId}", reservationId);

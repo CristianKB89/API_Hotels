@@ -29,7 +29,7 @@ namespace API_Hotels.Functions.ManagementHotels
         [OpenApiParameter(name: "hotelId", In = ParameterLocation.Path, Required = true, Type = typeof(Guid), Description = "The ID of the hotel to toggle.")]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(ResponseResult), Description = "The operation result.")]
         public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "patch", Route = "hotels/{hotelId}/toggle-status")] HttpRequest req, ILogger log, Guid hotelId)
+            [HttpTrigger(AuthorizationLevel.Anonymous, "patch", Route = "hotels/{hotelId}/toggle-status")] HttpRequest req, ILogger log, Guid hotelId)
         {
             log.LogInformation("Processing request to toggle status of hotel: {HotelId}", hotelId);
 

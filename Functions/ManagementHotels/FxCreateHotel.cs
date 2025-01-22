@@ -32,7 +32,7 @@ namespace API_Hotels.Functions.ManagementHotels
         [OpenApiOperation(operationId: "CreateHotel", tags: new[] { "Hotels" }, Summary = "Create a new hotel", Description = "This endpoint creates a new hotel and saves it to the database.")]
         [OpenApiRequestBody("application/json", typeof(HotelCreateRequestInput), Description = "Hotel details for creation", Required = true)]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(ResponseResult), Description = "The created hotel details.")]
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post", Route = "CreateHotel")] HttpRequest req, ILogger log)
+        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "CreateHotel")] HttpRequest req, ILogger log)
         {
             log.LogInformation("Processing request to create a new hotel.");
             try

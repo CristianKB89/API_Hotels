@@ -32,7 +32,7 @@ namespace API_Hotels.Functions.ManagementGuests
         [OpenApiRequestBody("application/json", typeof(AddGuestsRequestInput), Description = "Details of the additional guests", Required = true)]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(ResponseResult), Description = "The operation result.")]
 
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "put", Route = "reservations/{reservationId}/add-guests")] HttpRequest req, ILogger log, Guid reservationId)
+        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "reservations/{reservationId}/add-guests")] HttpRequest req, ILogger log, Guid reservationId)
         {
             log.LogInformation("Processing request to add guests to reservation: {ReservationId}", reservationId);
 

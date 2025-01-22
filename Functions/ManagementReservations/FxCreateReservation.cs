@@ -29,7 +29,7 @@ namespace API_Hotels.Functions.ManagementReservations
         [OpenApiOperation(operationId: "CreateReservation", tags: new[] { "Reservations" }, Summary = "Create a new reservation", Description = "This endpoint creates a new reservation for a hotel room.")]
         [OpenApiRequestBody("application/json", typeof(CreateReservationRequestInput), Description = "Reservation details", Required = true)]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(ResponseResult), Description = "The operation result.")]
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post", Route = "reservations")] HttpRequest req, ILogger log)
+        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "reservations")] HttpRequest req, ILogger log)
         {
             log.LogInformation("Processing request to create a new reservation.");
 
