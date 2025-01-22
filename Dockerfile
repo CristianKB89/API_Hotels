@@ -3,7 +3,7 @@
 # Esta fase se usa cuando se ejecuta desde VS en modo rápido (valor predeterminado para la configuración de depuración)
 FROM mcr.microsoft.com/azure-functions/dotnet:4-dotnet8.0 AS base
 WORKDIR /home/site/wwwroot
-EXPOSE 8080
+EXPOSE 8099
 
 
 # Esta fase se usa para compilar el proyecto de servicio
