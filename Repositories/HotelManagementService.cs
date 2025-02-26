@@ -3,6 +3,7 @@ using API_Hotels.Models;
 using API_Hotels.Models.Inputs;
 using API_Hotels.Repositories.Interfaces;
 using Dapper;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -14,6 +15,7 @@ namespace API_Hotels.Repositories
     public class HotelManagementService : IHotelManagementService
     {
         private readonly DapperContext _context;
+        private readonly ILogger<HotelManagementService> log;
 
         public HotelManagementService(DapperContext dapperContext)
         {
@@ -329,30 +331,30 @@ namespace API_Hotels.Repositories
 
             try
             {
-                Console.WriteLine("Intentando abrir la conexión...");
+                log.LogInformation("➡ Intentando abrir la conexión a la BD...");
 
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                Console.WriteLine("Conexión abierta con éxito.");
+                log.LogInformation("✅ Conexión abierta correctamente.");
 
-                const string query = @"SELECT HotelId AS HotelId, 
-                                 Name, Location, BasePrice, Status, 
-                                 CreatedAt, UpdatedAt
-                          FROM Hotels;";
+                const string query = @"SELECT HotelId, Name, Location, BasePrice, Status, CreatedAt, UpdatedAt FROM Hotels;";
+
+                log.LogInformation("📡 Ejecutando consulta SQL para obtener hoteles...");
 
                 var hotels = await db.QueryAsync<Hotels>(query);
 
-                Console.WriteLine($"Se encontraron {hotels.Count()} hoteles.");
+                log.LogInformation($"✅ Se encontraron {hotels.Count()} hoteles en la base de datos.");
 
                 return hotels.ToList();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error en GetHotels(): {ex}");
-                throw new Exception("Error retrieving hotels", ex);
+                log.LogError(ex, "❌ Error en GetHotels.");
+                throw new Exception($"Error retrieving hotels: {ex.Message}", ex);
             }
         }
+
 
 
 
