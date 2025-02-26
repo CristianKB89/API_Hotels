@@ -28,7 +28,7 @@ namespace API_Hotels.Functions.ManagementHotels
         [OpenApiOperation(operationId: "GetHotels", tags: new[] { "Hotels" }, Summary = "Retrieve all hotels", Description = "This endpoint retrieves a list of all hotels.")]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(List<Hotels>), Description = "The list of hotels.")]
         public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "hotels")] HttpRequest req, ILogger log)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "hotels")] HttpRequest req, ILogger log)
         {
             log.LogInformation("Processing request to retrieve all hotels.");
 
@@ -36,7 +36,27 @@ namespace API_Hotels.Functions.ManagementHotels
             {
                 var hotels = await _hotelManagementServices.GetHotels();
 
+                if (hotels == null || hotels.Count == 0)
+                {
+                    log.LogInformation("No hotels found.");
+                    return new StatusCodeResult(StatusCodes.Status204NoContent);
+                }
+
+                log.LogInformation($"Retrieved {hotels.Count} hotels successfully.");
                 return HttpResponseHelper.SuccessfulObjectResult(hotels);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                log.LogWarning(ex, "No hotels found.");
+                return new ObjectResult(new ResponseResult
+                {
+                    IsError = true,
+                    Message = "No hotels found.",
+                    Timestamp = DateTime.UtcNow
+                })
+                {
+                    StatusCode = StatusCodes.Status404NotFound
+                };
             }
             catch (Exception ex)
             {
@@ -52,5 +72,6 @@ namespace API_Hotels.Functions.ManagementHotels
                 };
             }
         }
+
     }
 }
