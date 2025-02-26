@@ -1,7 +1,6 @@
-﻿using MySql.Data.MySqlClient;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using System.Data;
-using System;
+using MySqlConnector;
 
 namespace API_Hotels.DataContext
 {
@@ -11,7 +10,7 @@ namespace API_Hotels.DataContext
 
         public DapperContext(IConfiguration configuration)
         {
-            _connectionString = Environment.GetEnvironmentVariable("MySqlConnectionString");
+            _connectionString = configuration.GetConnectionString("MySqlConnectionString");            
         }
 
         public IDbConnection CreateConnection()
