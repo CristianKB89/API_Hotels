@@ -34,9 +34,9 @@ namespace API_Hotels.Repositories
 
                 using var transaction = db.BeginTransaction(); // Iniciar transacción
 
-                const string queryGetGuestId = @"SELECT BIN_TO_UUID(GuestId) AS GuestId 
+                const string queryGetGuestId = @"SELECT GuestId AS GuestId 
                                                  FROM Guests 
-                                                 WHERE ReservationId = UUID_TO_BIN(@ReservationId) 
+                                                 WHERE ReservationId = @ReservationId 
                                                  LIMIT 1;";
 
                 var guestId = await db.ExecuteScalarAsync<Guid?>(queryGetGuestId, new { ReservationId = reservationId }, transaction);
@@ -47,7 +47,7 @@ namespace API_Hotels.Repositories
                 }
 
                 const string queryInsertEmergencyContact = @"INSERT INTO EmergencyContacts (ContactId, GuestId, FullName, Phone, Relationship) 
-                                                             VALUES (UUID_TO_BIN(@ContactId), UUID_TO_BIN(@GuestId), @FullName, @Phone, @Relationship);";
+                                                             VALUES (@ContactId, @GuestId, @FullName, @Phone, @Relationship);";
 
                 var insertParameters = new
                 {
@@ -84,12 +84,12 @@ namespace API_Hotels.Repositories
 
                 const string queryCheckReservation = @"SELECT TotalGuests 
                                                        FROM Reservations 
-                                                       WHERE ReservationId = UUID_TO_BIN(@ReservationId) 
+                                                       WHERE ReservationId = @ReservationId 
                                                        FOR UPDATE;";  // Bloquea fila para evitar concurrencia
 
                 const string queryUpdateGuests = @"UPDATE Reservations 
                                                    SET TotalGuests = TotalGuests + @NumberOfAdditionalGuests 
-                                                   WHERE ReservationId = UUID_TO_BIN(@ReservationId);";
+                                                   WHERE ReservationId = @ReservationId;";
 
                 var parameters = new
                 {
@@ -127,7 +127,7 @@ namespace API_Hotels.Repositories
 
                 const string query = @"INSERT INTO Rooms 
                                (RoomId, HotelId, RoomType, BaseCost, TaxPercentage, Status, CreatedAt) 
-                               VALUES (UUID_TO_BIN(@RoomId), UUID_TO_BIN(@HotelId), @RoomType, @BaseCost, @TaxPercentage, @Status, @CreatedAt);";
+                               VALUES (@RoomId, @HotelId, @RoomType, @BaseCost, @TaxPercentage, @Status, @CreatedAt);";
 
                 var roomId = Guid.NewGuid();
 
@@ -169,7 +169,7 @@ namespace API_Hotels.Repositories
 
                 const string query = @"INSERT INTO Hotels 
                                (HotelId, Name, Location, BasePrice, Status, CreatedAt) 
-                               VALUES (UUID_TO_BIN(@HotelId), @Name, @Location, @BasePrice, @Status, @CreatedAt);";
+                               VALUES (@HotelId, @Name, @Location, @BasePrice, @Status, @CreatedAt);";
 
                 var hotelId = Guid.NewGuid();
 
@@ -210,19 +210,19 @@ namespace API_Hotels.Repositories
 
                 const string checkRoomQuery = @"SELECT COUNT(1) 
                                         FROM Rooms r 
-                                        WHERE r.RoomId = UUID_TO_BIN(@RoomId) 
-                                          AND r.HotelId = UUID_TO_BIN(@HotelId) 
+                                        WHERE r.RoomId = @RoomId
+                                          AND r.HotelId = @HotelId
                                           AND r.Status = TRUE;";
 
                 const string checkAvailabilityQuery = @"SELECT COUNT(1) 
                                                 FROM Reservations res 
-                                                WHERE res.RoomId = UUID_TO_BIN(@RoomId) 
+                                                WHERE res.RoomId = @RoomId
                                                   AND NOT (@CheckOutDate <= res.CheckInDate 
                                                            OR @CheckInDate >= res.CheckOutDate);";
 
                 const string createReservationQuery = @"INSERT INTO Reservations 
                                                 (ReservationId, RoomId, CheckInDate, CheckOutDate, TotalGuests, CreatedAt, TotalCost, EmailNotification) 
-                                                VALUES (UUID_TO_BIN(@ReservationId), UUID_TO_BIN(@RoomId), @CheckInDate, @CheckOutDate, @TotalGuests, @CreatedAt, @TotalCost, @EmailNotification);";
+                                                VALUES (@ReservationId, @RoomId, @CheckInDate, @CheckOutDate, @TotalGuests, @CreatedAt, @TotalCost, @EmailNotification);";
 
                 var reservationId = Guid.NewGuid();
 
@@ -280,12 +280,12 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT BIN_TO_UUID(GuestId) AS GuestId, 
-                                      BIN_TO_UUID(ReservationId) AS ReservationId, 
+                const string query = @"SELECT GuestId AS GuestId, 
+                                      ReservationId AS ReservationId, 
                                       FullName, DateOfBirth, Gender, DocumentType, 
                                       DocumentNumber, Email, Phone 
                                FROM Guests 
-                               WHERE ReservationId = UUID_TO_BIN(@ReservationId);";
+                               WHERE ReservationId = @ReservationId;";
 
                 var guests = await db.QueryAsync<Guests>(query, new { ReservationId = reservationId });
 
@@ -308,11 +308,11 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT BIN_TO_UUID(HotelId) AS HotelId, 
+                const string query = @"SELECT HotelId AS HotelId, 
                                       Name, Location, BasePrice, Status, 
                                       CreatedAt, UpdatedAt
                                FROM Hotels
-                               WHERE HotelId = UUID_TO_BIN(@HotelId);";
+                               WHERE HotelId = @HotelId;";
 
                 return await db.QuerySingleOrDefaultAsync<Hotels>(query, new { HotelId = hotelId });
             }
@@ -332,7 +332,7 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT BIN_TO_UUID(HotelId) AS HotelId, 
+                const string query = @"SELECT HotelId AS HotelId, 
                                       Name, Location, BasePrice, Status, 
                                       CreatedAt, UpdatedAt
                                FROM Hotels;";
@@ -356,13 +356,13 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT BIN_TO_UUID(r.ReservationId) AS ReservationId, 
-                                      BIN_TO_UUID(r.RoomId) AS RoomId, 
+                const string query = @"SELECT r.ReservationId AS ReservationId, 
+                                      r.RoomId AS RoomId, 
                                       r.CheckInDate, r.CheckOutDate, 
                                       r.TotalGuests, r.TotalCost, 
                                       r.EmailNotification, r.CreatedAt
                                FROM Reservations r
-                               WHERE r.ReservationId = UUID_TO_BIN(@ReservationId);";
+                               WHERE r.ReservationId = @ReservationId;";
 
                 var parameters = new { ReservationId = reservationId };
 
@@ -385,14 +385,14 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT BIN_TO_UUID(r.ReservationId) AS ReservationId, 
-                                      BIN_TO_UUID(r.RoomId) AS RoomId, 
+                const string query = @"SELECT r.ReservationId AS ReservationId, 
+                                      r.RoomId AS RoomId, 
                                       r.CheckInDate, r.CheckOutDate, 
                                       r.TotalGuests, r.TotalCost, 
                                       r.EmailNotification, r.CreatedAt
                                FROM Reservations r
                                INNER JOIN Rooms rm ON r.RoomId = rm.RoomId
-                               WHERE rm.HotelId = UUID_TO_BIN(@HotelId)
+                               WHERE rm.HotelId = @HotelId
                                ORDER BY r.CheckInDate;";
 
                 var parameters = new { HotelId = hotelId };
@@ -417,12 +417,12 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT BIN_TO_UUID(RoomId) AS RoomId, 
-                                      BIN_TO_UUID(HotelId) AS HotelId, 
+                const string query = @"SELECT RoomId AS RoomId, 
+                                      HotelId AS HotelId, 
                                       RoomType, BaseCost, TaxPercentage, 
                                       Status, CreatedAt, UpdatedAt
                                FROM Rooms
-                               WHERE HotelId = UUID_TO_BIN(@HotelId);";
+                               WHERE HotelId = @HotelId;";
 
                 var parameters = new { HotelId = hotelId };
 
@@ -446,7 +446,7 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT DISTINCT BIN_TO_UUID(h.HotelId) AS HotelId, 
+                const string query = @"SELECT DISTINCT h.HotelId AS HotelId, 
                                       h.Name, h.Location, h.BasePrice, 
                                       h.Status, h.CreatedAt, h.UpdatedAt
                                FROM Hotels h
@@ -493,10 +493,10 @@ namespace API_Hotels.Repositories
                 const string updateQuery = @"UPDATE Hotels
                                      SET Status = CASE WHEN Status = 1 THEN 0 ELSE 1 END,
                                          UpdatedAt = @UpdatedAt
-                                     WHERE HotelId = UUID_TO_BIN(@HotelId);";
+                                     WHERE HotelId = @HotelId;";
 
-                const string selectQuery = @"SELECT BIN_TO_UUID(HotelId) AS HotelId, Status 
-                                     FROM Hotels WHERE HotelId = UUID_TO_BIN(@HotelId);";
+                const string selectQuery = @"SELECT HotelId AS HotelId, Status 
+                                     FROM Hotels WHERE HotelId = @HotelId;";
 
                 var parameters = new
                 {
@@ -531,11 +531,11 @@ namespace API_Hotels.Repositories
                 const string updateQuery = @"UPDATE Rooms
                                      SET Status = NOT Status,
                                          UpdatedAt = @UpdatedAt
-                                     WHERE RoomId = UUID_TO_BIN(@RoomId);";
+                                     WHERE RoomId = @RoomId;";
 
                 const string selectQuery = @"SELECT Status 
                                      FROM Rooms 
-                                     WHERE RoomId = UUID_TO_BIN(@RoomId);";
+                                     WHERE RoomId = @RoomId;";
 
                 var parameters = new
                 {
@@ -573,7 +573,7 @@ namespace API_Hotels.Repositories
                                    BasePrice = @BasePrice,
                                    Status = @Status,
                                    UpdatedAt = @UpdatedAt
-                               WHERE HotelId = UUID_TO_BIN(@HotelId);";
+                               WHERE HotelId = @HotelId;";
 
                 var parameters = new
                 {
@@ -610,7 +610,7 @@ namespace API_Hotels.Repositories
                                    TaxPercentage = @TaxPercentage,
                                    Status = @Status,
                                    UpdatedAt = @UpdatedAt
-                               WHERE RoomId = UUID_TO_BIN(@RoomId);";
+                               WHERE RoomId = @RoomId;";
 
                 var parameters = new
                 {
