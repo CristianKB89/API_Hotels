@@ -8,26 +8,26 @@ namespace API_Hotels.Repositories.Interfaces
 {
     public interface IHotelManagementService
     {
-        /// Hotel Management Service
+        // Hotel Management
         Task<bool> ToggleHotelStatus(Guid hotelId);
         Task<Guid> CreateHotel(HotelCreateRequestInput hotel);
         Task UpdateHotel(Guid hotelId, HotelUpdateRequestInput request);
         Task<List<Hotels>> GetHotels();
-        Task<Hotels> GetHotelById(Guid hotelId);
+        Task<Hotels?> GetHotelById(Guid hotelId);
 
-        /// Room Management Service
+        // Room Management
         Task<Guid> AddRoomToHotel(Guid hotelId, AddRoomRequestInput roomData);
         Task UpdateRoom(Guid roomId, UpdateRoomRequestInput roomData);
         Task<bool> ToggleRoomStatus(Guid roomId);
         Task<List<Rooms>> GetRoomsByHotel(Guid hotelId);
 
-        /// Reservation Management Service
-        Task<List<Hotels>> SearchHotels(string city, DateTime checkInDate, DateTime checkOutDate, int numGuests);
-        Task CreateReservation(CreateReservationRequestInput reservationData);
+        // Reservation Management
+        Task<List<Hotels>> SearchHotels(string? city, DateTime checkInDate, DateTime checkOutDate, int numGuests);
+        Task<Guid> CreateReservation(CreateReservationRequestInput reservationData);
         Task<List<Reservations>> GetReservationsByHotel(Guid hotelId);
-        Task<Reservations> GetReservationDetails(Guid reservationId);
+        Task<Reservations?> GetReservationDetails(Guid reservationId);
 
-        /// Guest Management Service
+        // Guest Management
         Task AddGuestsToReservation(Guid reservationId, int numberOfAdditionalGuests);
         Task AddEmergencyContact(Guid reservationId, AddEmergencyContactRequestInput emergencyContactRequest);
         Task<List<Guests>> GetGuestsByReservation(Guid reservationId);
