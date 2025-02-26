@@ -329,21 +329,31 @@ namespace API_Hotels.Repositories
 
             try
             {
+                Console.WriteLine("Intentando abrir la conexión...");
+
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT HotelId AS HotelId, 
-                                      Name, Location, BasePrice, Status, 
-                                      CreatedAt, UpdatedAt
-                               FROM Hotels;";
+                Console.WriteLine("Conexión abierta con éxito.");
 
-                return (await db.QueryAsync<Hotels>(query)).ToList();
+                const string query = @"SELECT HotelId AS HotelId, 
+                                 Name, Location, BasePrice, Status, 
+                                 CreatedAt, UpdatedAt
+                          FROM Hotels;";
+
+                var hotels = await db.QueryAsync<Hotels>(query);
+
+                Console.WriteLine($"Se encontraron {hotels.Count()} hoteles.");
+
+                return hotels.ToList();
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error en GetHotels(): {ex}");
                 throw new Exception("Error retrieving hotels", ex);
             }
         }
+
 
 
 
