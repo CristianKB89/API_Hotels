@@ -64,13 +64,14 @@ namespace API_Hotels.Functions.ManagementHotels
                 return new ObjectResult(new ResponseResult
                 {
                     IsError = true,
-                    Message = "An unexpected error occurred.",
+                    Message = ex.Message,  // ⬅️ Agregamos el mensaje real del error
                     Timestamp = DateTime.UtcNow
                 })
                 {
                     StatusCode = StatusCodes.Status500InternalServerError
                 };
             }
+
         }
 
     }
