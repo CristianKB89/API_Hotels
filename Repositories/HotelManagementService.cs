@@ -15,11 +15,12 @@ namespace API_Hotels.Repositories
     public class HotelManagementService : IHotelManagementService
     {
         private readonly DapperContext _context;
-        private readonly ILogger<HotelManagementService> log;
+        private readonly ILogger<HotelManagementService> _logger;
 
-        public HotelManagementService(DapperContext dapperContext)
+        public HotelManagementService(DapperContext dapperContext, ILogger<HotelManagementService> logger)
         {
             _context = dapperContext;
+            _logger = logger;
         }
 
         /// <summary>
@@ -331,26 +332,26 @@ namespace API_Hotels.Repositories
 
             try
             {
-                log.LogInformation("➡ Intentando abrir la conexión a la BD...");
+                _logger.LogInformation("➡ Intentando abrir la conexión a la BD...");
 
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                log.LogInformation("✅ Conexión abierta correctamente.");
+                _logger.LogInformation("✅ Conexión abierta correctamente.");
 
                 const string query = @"SELECT HotelId, Name, Location, BasePrice, Status, CreatedAt, UpdatedAt FROM Hotels;";
 
-                log.LogInformation("📡 Ejecutando consulta SQL para obtener hoteles...");
+                _logger.LogInformation("📡 Ejecutando consulta SQL para obtener hoteles...");
 
                 var hotels = await db.QueryAsync<Hotels>(query);
 
-                log.LogInformation($"✅ Se encontraron {hotels.Count()} hoteles en la base de datos.");
+                _logger.LogInformation($"✅ Se encontraron {hotels.Count()} hoteles en la base de datos.");
 
                 return hotels.ToList();
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "❌ Error en GetHotels.");
+                _logger.LogError(ex, "❌ Error en GetHotels.");
                 throw new Exception($"Error retrieving hotels: {ex.Message}", ex);
             }
         }
