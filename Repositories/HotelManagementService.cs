@@ -20,6 +20,9 @@ namespace API_Hotels.Repositories
             _context = dapperContext;
         }
 
+        /// <summary>
+        /// Agrega un contacto de emergencia a la reserva
+        /// </summary>
         public async Task AddEmergencyContact(Guid reservationId, AddEmergencyContactRequestInput emergencyContactRequest)
         {
             using var db = _context.CreateConnection();
@@ -28,31 +31,36 @@ namespace API_Hotels.Repositories
             {
                 if (db.State == ConnectionState.Closed)
                     db.Open();
-                const string queryGetGuestId = @"SELECT GuestId 
-                                         FROM Guests 
-                                         WHERE ReservationId = @ReservationId 
-                                         LIMIT 1;";
 
-                var guestId = await db.ExecuteScalarAsync<Guid?>(queryGetGuestId, new { ReservationId = reservationId });
+                using var transaction = db.BeginTransaction(); // Iniciar transacción
+
+                const string queryGetGuestId = @"SELECT BIN_TO_UUID(GuestId) AS GuestId 
+                                                 FROM Guests 
+                                                 WHERE ReservationId = UUID_TO_BIN(@ReservationId) 
+                                                 LIMIT 1;";
+
+                var guestId = await db.ExecuteScalarAsync<Guid?>(queryGetGuestId, new { ReservationId = reservationId }, transaction);
 
                 if (guestId == null)
                 {
-                    throw new Exception($"No guest found for ReservationId: {reservationId}");
+                    throw new KeyNotFoundException($"No guest found for ReservationId: {reservationId}");
                 }
 
                 const string queryInsertEmergencyContact = @"INSERT INTO EmergencyContacts (ContactId, GuestId, FullName, Phone, Relationship) 
-                                                     VALUES (@ContactId, @GuestId, @FullName, @Phone, @Relationship);";
+                                                             VALUES (UUID_TO_BIN(@ContactId), UUID_TO_BIN(@GuestId), @FullName, @Phone, @Relationship);";
 
-                var insertParameters = new DynamicParameters(new
+                var insertParameters = new
                 {
                     ContactId = Guid.NewGuid(),
                     GuestId = guestId,
                     FullName = emergencyContactRequest.FullName,
                     Phone = emergencyContactRequest.Phone,
                     Relationship = emergencyContactRequest.Relationship
-                });
+                };
 
-                await db.ExecuteAsync(queryInsertEmergencyContact, insertParameters);
+                await db.ExecuteAsync(queryInsertEmergencyContact, insertParameters, transaction);
+
+                transaction.Commit(); // Confirmar transacción
             }
             catch (Exception ex)
             {
@@ -60,7 +68,9 @@ namespace API_Hotels.Repositories
             }
         }
 
-
+        /// <summary>
+        /// Agrega huéspedes adicionales a la reserva
+        /// </summary>
         public async Task AddGuestsToReservation(Guid reservationId, int numberOfAdditionalGuests)
         {
             using var db = _context.CreateConnection();
@@ -70,33 +80,38 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
+                using var transaction = db.BeginTransaction(); // Iniciar transacción
+
                 const string queryCheckReservation = @"SELECT TotalGuests 
-                                               FROM Reservations 
-                                               WHERE ReservationId = @ReservationId;";
+                                                       FROM Reservations 
+                                                       WHERE ReservationId = UUID_TO_BIN(@ReservationId) 
+                                                       FOR UPDATE;";  // Bloquea fila para evitar concurrencia
 
                 const string queryUpdateGuests = @"UPDATE Reservations 
-                                           SET TotalGuests = TotalGuests + @NumberOfAdditionalGuests 
-                                           WHERE ReservationId = @ReservationId;";
+                                                   SET TotalGuests = TotalGuests + @NumberOfAdditionalGuests 
+                                                   WHERE ReservationId = UUID_TO_BIN(@ReservationId);";
 
-                var parameters = new DynamicParameters(new
+                var parameters = new
                 {
                     ReservationId = reservationId,
                     NumberOfAdditionalGuests = numberOfAdditionalGuests
-                });
+                };
 
-                int? currentNumberOfGuests = await db.ExecuteScalarAsync<int?>(queryCheckReservation, parameters);
+                int? currentNumberOfGuests = await db.ExecuteScalarAsync<int?>(queryCheckReservation, parameters, transaction);
                 if (currentNumberOfGuests == null)
                 {
                     throw new KeyNotFoundException($"Reservation with ID: {reservationId} not found.");
                 }
 
-                await db.ExecuteAsync(queryUpdateGuests, parameters);
+                await db.ExecuteAsync(queryUpdateGuests, parameters, transaction);
+                transaction.Commit(); // Confirmar cambios
             }
             catch (Exception ex)
             {
                 throw new Exception($"Error adding guests to reservation with ID: {reservationId}: {ex.Message}", ex);
             }
         }
+
 
 
         public async Task<Guid> AddRoomToHotel(Guid hotelId, AddRoomRequestInput roomData)
@@ -108,10 +123,11 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
+                using var transaction = db.BeginTransaction(); // Iniciar transacción
+
                 const string query = @"INSERT INTO Rooms 
                                (RoomId, HotelId, RoomType, BaseCost, TaxPercentage, Status, CreatedAt) 
-                               VALUES (@RoomId, @HotelId, @RoomType, @BaseCost, @TaxPercentage, @Status, @CreatedAt) 
-                               RETURNING RoomId;";
+                               VALUES (UUID_TO_BIN(@RoomId), UUID_TO_BIN(@HotelId), @RoomType, @BaseCost, @TaxPercentage, @Status, @CreatedAt);";
 
                 var roomId = Guid.NewGuid();
 
@@ -126,15 +142,18 @@ namespace API_Hotels.Repositories
                     CreatedAt = DateTime.UtcNow
                 };
 
-                var insertedRoomId = await db.ExecuteScalarAsync<Guid>(query, parameters);
+                await db.ExecuteAsync(query, parameters, transaction);
 
-                return insertedRoomId;
+                transaction.Commit(); // Confirmar la transacción
+
+                return roomId;
             }
             catch (Exception ex)
             {
                 throw new Exception($"Error adding room to hotel with ID: {hotelId}: {ex.Message}", ex);
             }
         }
+
 
 
         public async Task<Guid> CreateHotel(HotelCreateRequestInput hotel)
@@ -146,10 +165,11 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
+                using var transaction = db.BeginTransaction(); // Iniciar transacción
+
                 const string query = @"INSERT INTO Hotels 
                                (HotelId, Name, Location, BasePrice, Status, CreatedAt) 
-                               VALUES (@HotelId, @Name, @Location, @BasePrice, @Status, @CreatedAt) 
-                               RETURNING HotelId;"; // 🔹 Retorna el ID insertado
+                               VALUES (UUID_TO_BIN(@HotelId), @Name, @Location, @BasePrice, @Status, @CreatedAt);";
 
                 var hotelId = Guid.NewGuid();
 
@@ -163,14 +183,18 @@ namespace API_Hotels.Repositories
                     CreatedAt = DateTime.UtcNow
                 };
 
-                var insertedHotelId = await db.ExecuteScalarAsync<Guid>(query, parameters);
-                return insertedHotelId;
+                await db.ExecuteAsync(query, parameters, transaction);
+
+                transaction.Commit(); // Confirmar la transacción
+
+                return hotelId;
             }
             catch (Exception ex)
             {
                 throw new Exception("Error creating hotel", ex);
             }
         }
+
 
 
         public async Task<Guid> CreateReservation(CreateReservationRequestInput reservationData)
@@ -182,22 +206,23 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
+                using var transaction = db.BeginTransaction(); // Iniciar transacción
+
                 const string checkRoomQuery = @"SELECT COUNT(1) 
                                         FROM Rooms r 
-                                        WHERE r.RoomId = @RoomId 
-                                            AND r.HotelId = @HotelId 
-                                            AND r.Status = TRUE;";
+                                        WHERE r.RoomId = UUID_TO_BIN(@RoomId) 
+                                          AND r.HotelId = UUID_TO_BIN(@HotelId) 
+                                          AND r.Status = TRUE;";
 
                 const string checkAvailabilityQuery = @"SELECT COUNT(1) 
                                                 FROM Reservations res 
-                                                WHERE res.RoomId = @RoomId 
-                                                    AND NOT (@CheckOutDate <= res.CheckInDate 
-                                                             OR @CheckInDate >= res.CheckOutDate);";
+                                                WHERE res.RoomId = UUID_TO_BIN(@RoomId) 
+                                                  AND NOT (@CheckOutDate <= res.CheckInDate 
+                                                           OR @CheckInDate >= res.CheckOutDate);";
 
                 const string createReservationQuery = @"INSERT INTO Reservations 
                                                 (ReservationId, RoomId, CheckInDate, CheckOutDate, TotalGuests, CreatedAt, TotalCost, EmailNotification) 
-                                                VALUES (@ReservationId, @RoomId, @CheckInDate, @CheckOutDate, @TotalGuests, @CreatedAt, @TotalCost, @EmailNotification) 
-                                                RETURNING ReservationId;"; // 🔹 Retorna el ID insertado
+                                                VALUES (UUID_TO_BIN(@ReservationId), UUID_TO_BIN(@RoomId), @CheckInDate, @CheckOutDate, @TotalGuests, @CreatedAt, @TotalCost, @EmailNotification);";
 
                 var reservationId = Guid.NewGuid();
 
@@ -210,12 +235,12 @@ namespace API_Hotels.Repositories
                 };
 
                 // 🔹 Verificar que la habitación existe y pertenece al hotel
-                int roomExists = await db.ExecuteScalarAsync<int>(checkRoomQuery, parameters);
+                int roomExists = await db.ExecuteScalarAsync<int>(checkRoomQuery, parameters, transaction);
                 if (roomExists == 0)
                     throw new Exception("The specified room does not exist or does not belong to the specified hotel.");
 
                 // 🔹 Verificar disponibilidad de la habitación en las fechas
-                int conflicts = await db.ExecuteScalarAsync<int>(checkAvailabilityQuery, parameters);
+                int conflicts = await db.ExecuteScalarAsync<int>(checkAvailabilityQuery, parameters, transaction);
                 if (conflicts > 0)
                     throw new Exception("The room is not available for the selected dates.");
 
@@ -232,14 +257,18 @@ namespace API_Hotels.Repositories
                     CreatedAt = DateTime.UtcNow
                 };
 
-                var insertedReservationId = await db.ExecuteScalarAsync<Guid>(createReservationQuery, reservationParams);
-                return insertedReservationId;
+                await db.ExecuteAsync(createReservationQuery, reservationParams, transaction);
+
+                transaction.Commit(); // Confirmar cambios
+
+                return reservationId;
             }
             catch (Exception ex)
             {
                 throw new Exception("Error creating reservation", ex);
             }
         }
+
 
 
         public async Task<List<Guests>> GetGuestsByReservation(Guid reservationId)
@@ -251,9 +280,12 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT GuestId, ReservationId, FullName, DateOfBirth, Gender, DocumentType, DocumentNumber, Email, Phone 
+                const string query = @"SELECT BIN_TO_UUID(GuestId) AS GuestId, 
+                                      BIN_TO_UUID(ReservationId) AS ReservationId, 
+                                      FullName, DateOfBirth, Gender, DocumentType, 
+                                      DocumentNumber, Email, Phone 
                                FROM Guests 
-                               WHERE ReservationId = @ReservationId;";
+                               WHERE ReservationId = UUID_TO_BIN(@ReservationId);";
 
                 var guests = await db.QueryAsync<Guests>(query, new { ReservationId = reservationId });
 
@@ -266,6 +298,7 @@ namespace API_Hotels.Repositories
         }
 
 
+
         public async Task<Hotels> GetHotelById(Guid hotelId)
         {
             using var db = _context.CreateConnection();
@@ -275,9 +308,11 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT HotelId, Name, Location, BasePrice, Status, CreatedAt, UpdatedAt
+                const string query = @"SELECT BIN_TO_UUID(HotelId) AS HotelId, 
+                                      Name, Location, BasePrice, Status, 
+                                      CreatedAt, UpdatedAt
                                FROM Hotels
-                               WHERE HotelId = @HotelId;";
+                               WHERE HotelId = UUID_TO_BIN(@HotelId);";
 
                 return await db.QuerySingleOrDefaultAsync<Hotels>(query, new { HotelId = hotelId });
             }
@@ -297,7 +332,9 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT HotelId, Name, Location, BasePrice, Status, CreatedAt, UpdatedAt
+                const string query = @"SELECT BIN_TO_UUID(HotelId) AS HotelId, 
+                                      Name, Location, BasePrice, Status, 
+                                      CreatedAt, UpdatedAt
                                FROM Hotels;";
 
                 return (await db.QueryAsync<Hotels>(query)).ToList();
@@ -309,6 +346,7 @@ namespace API_Hotels.Repositories
         }
 
 
+
         public async Task<Reservations> GetReservationDetails(Guid reservationId)
         {
             using var db = _context.CreateConnection();
@@ -318,10 +356,13 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT r.ReservationId, r.RoomId, r.CheckInDate, r.CheckOutDate, 
-                                      r.TotalGuests, r.TotalCost, r.EmailNotification, r.CreatedAt
+                const string query = @"SELECT BIN_TO_UUID(r.ReservationId) AS ReservationId, 
+                                      BIN_TO_UUID(r.RoomId) AS RoomId, 
+                                      r.CheckInDate, r.CheckOutDate, 
+                                      r.TotalGuests, r.TotalCost, 
+                                      r.EmailNotification, r.CreatedAt
                                FROM Reservations r
-                               WHERE r.ReservationId = @ReservationId;";
+                               WHERE r.ReservationId = UUID_TO_BIN(@ReservationId);";
 
                 var parameters = new { ReservationId = reservationId };
 
@@ -334,6 +375,7 @@ namespace API_Hotels.Repositories
         }
 
 
+
         public async Task<List<Reservations>> GetReservationsByHotel(Guid hotelId)
         {
             using var db = _context.CreateConnection();
@@ -343,11 +385,14 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT r.ReservationId, r.RoomId, r.CheckInDate, r.CheckOutDate, 
-                                      r.TotalGuests, r.TotalCost, r.EmailNotification, r.CreatedAt
+                const string query = @"SELECT BIN_TO_UUID(r.ReservationId) AS ReservationId, 
+                                      BIN_TO_UUID(r.RoomId) AS RoomId, 
+                                      r.CheckInDate, r.CheckOutDate, 
+                                      r.TotalGuests, r.TotalCost, 
+                                      r.EmailNotification, r.CreatedAt
                                FROM Reservations r
                                INNER JOIN Rooms rm ON r.RoomId = rm.RoomId
-                               WHERE rm.HotelId = @HotelId
+                               WHERE rm.HotelId = UUID_TO_BIN(@HotelId)
                                ORDER BY r.CheckInDate;";
 
                 var parameters = new { HotelId = hotelId };
@@ -362,6 +407,7 @@ namespace API_Hotels.Repositories
         }
 
 
+
         public async Task<List<Rooms>> GetRoomsByHotel(Guid hotelId)
         {
             using var db = _context.CreateConnection();
@@ -371,10 +417,12 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT RoomId, HotelId, RoomType, BaseCost, TaxPercentage, 
+                const string query = @"SELECT BIN_TO_UUID(RoomId) AS RoomId, 
+                                      BIN_TO_UUID(HotelId) AS HotelId, 
+                                      RoomType, BaseCost, TaxPercentage, 
                                       Status, CreatedAt, UpdatedAt
                                FROM Rooms
-                               WHERE HotelId = @HotelId;";
+                               WHERE HotelId = UUID_TO_BIN(@HotelId);";
 
                 var parameters = new { HotelId = hotelId };
 
@@ -388,6 +436,7 @@ namespace API_Hotels.Repositories
         }
 
 
+
         public async Task<List<Hotels>> SearchHotels(string city, DateTime checkInDate, DateTime checkOutDate, int numGuests)
         {
             using var db = _context.CreateConnection();
@@ -397,19 +446,21 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"SELECT DISTINCT h.HotelId, h.Name, h.Location, h.BasePrice, h.Status, h.CreatedAt, h.UpdatedAt
-                                        FROM Hotels h
-                                        INNER JOIN Rooms r ON r.HotelId = h.HotelId
-                                        WHERE (@City IS NULL OR h.Location = @City)
-                                          AND h.Status = 1
-                                          AND r.Status = 1
-                                          AND r.RoomId NOT IN (
-                                              SELECT res.RoomId 
-                                              FROM Reservations res 
-                                              WHERE NOT (@CheckOutDate <= res.CheckInDate OR @CheckInDate >= res.CheckOutDate)
-                                          )
-                                          AND r.Capacity >= @NumGuests
-                                        ORDER BY h.Name;";
+                const string query = @"SELECT DISTINCT BIN_TO_UUID(h.HotelId) AS HotelId, 
+                                      h.Name, h.Location, h.BasePrice, 
+                                      h.Status, h.CreatedAt, h.UpdatedAt
+                               FROM Hotels h
+                               INNER JOIN Rooms r ON r.HotelId = h.HotelId
+                               WHERE (@City IS NULL OR h.Location = @City)
+                                 AND h.Status = 1
+                                 AND r.Status = 1
+                                 AND r.RoomId NOT IN (
+                                     SELECT res.RoomId 
+                                     FROM Reservations res 
+                                     WHERE NOT (@CheckOutDate <= res.CheckInDate OR @CheckInDate >= res.CheckOutDate)
+                                 )
+                                 AND r.Capacity >= @NumGuests
+                               ORDER BY h.Name;";
 
                 var parameters = new
                 {
@@ -429,6 +480,7 @@ namespace API_Hotels.Repositories
         }
 
 
+
         public async Task<bool> ToggleHotelStatus(Guid hotelId)
         {
             using var db = _context.CreateConnection();
@@ -438,11 +490,13 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"UPDATE Hotels
-                        SET Status = CASE WHEN Status = 1 THEN 0 ELSE 1 END,
-                            UpdatedAt = @UpdatedAt
-                        OUTPUT INSERTED.Status
-                        WHERE HotelId = @HotelId;";
+                const string updateQuery = @"UPDATE Hotels
+                                     SET Status = CASE WHEN Status = 1 THEN 0 ELSE 1 END,
+                                         UpdatedAt = @UpdatedAt
+                                     WHERE HotelId = UUID_TO_BIN(@HotelId);";
+
+                const string selectQuery = @"SELECT BIN_TO_UUID(HotelId) AS HotelId, Status 
+                                     FROM Hotels WHERE HotelId = UUID_TO_BIN(@HotelId);";
 
                 var parameters = new
                 {
@@ -450,13 +504,19 @@ namespace API_Hotels.Repositories
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                return await db.QuerySingleOrDefaultAsync<bool>(query, parameters);
+                await db.ExecuteAsync(updateQuery, parameters);
+
+                // 🔹 Obtener el nuevo estado del hotel
+                var updatedStatus = await db.QuerySingleOrDefaultAsync<bool>(selectQuery, new { HotelId = hotelId });
+
+                return updatedStatus;
             }
             catch (Exception ex)
             {
                 throw new Exception($"Error toggling hotel status for HotelId: {hotelId}", ex);
             }
         }
+
 
 
         public async Task<bool> ToggleRoomStatus(Guid roomId)
@@ -468,11 +528,14 @@ namespace API_Hotels.Repositories
                 if (db.State == ConnectionState.Closed)
                     db.Open();
 
-                const string query = @"UPDATE Rooms
-                            SET Status = NOT Status,
-                                UpdatedAt = @UpdatedAt
-                            WHERE RoomId = @RoomId
-                            RETURNING Status;";
+                const string updateQuery = @"UPDATE Rooms
+                                     SET Status = NOT Status,
+                                         UpdatedAt = @UpdatedAt
+                                     WHERE RoomId = UUID_TO_BIN(@RoomId);";
+
+                const string selectQuery = @"SELECT Status 
+                                     FROM Rooms 
+                                     WHERE RoomId = UUID_TO_BIN(@RoomId);";
 
                 var parameters = new
                 {
@@ -480,14 +543,19 @@ namespace API_Hotels.Repositories
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                // Ejecuta el UPDATE y retorna el valor actualizado de Status
-                return await db.QuerySingleOrDefaultAsync<bool>(query, parameters);
+                await db.ExecuteAsync(updateQuery, parameters);
+
+                // 🔹 Obtener el nuevo estado de la habitación
+                var updatedStatus = await db.QuerySingleOrDefaultAsync<bool>(selectQuery, new { RoomId = roomId });
+
+                return updatedStatus;
             }
             catch (Exception ex)
             {
                 throw new Exception($"Error toggling status for room with ID: {roomId}", ex);
             }
         }
+
 
 
         public async Task UpdateHotel(Guid hotelId, HotelUpdateRequestInput request)
@@ -500,12 +568,12 @@ namespace API_Hotels.Repositories
                     db.Open();
 
                 const string query = @"UPDATE Hotels
-                                SET Name = @Name,
-                                    Location = @Location,
-                                    BasePrice = @BasePrice,
-                                    Status = @Status,
-                                    UpdatedAt = @UpdatedAt
-                                WHERE HotelId = @HotelId;";
+                               SET Name = @Name,
+                                   Location = @Location,
+                                   BasePrice = @BasePrice,
+                                   Status = @Status,
+                                   UpdatedAt = @UpdatedAt
+                               WHERE HotelId = UUID_TO_BIN(@HotelId);";
 
                 var parameters = new
                 {
@@ -526,6 +594,7 @@ namespace API_Hotels.Repositories
         }
 
 
+
         public async Task UpdateRoom(Guid roomId, UpdateRoomRequestInput roomData)
         {
             using var db = _context.CreateConnection();
@@ -536,12 +605,12 @@ namespace API_Hotels.Repositories
                     db.Open();
 
                 const string query = @"UPDATE Rooms
-                                        SET RoomType = @RoomType,
-                                            BaseCost = @BaseCost,
-                                            TaxPercentage = @TaxPercentage,
-                                            Status = @Status,
-                                            UpdatedAt = @UpdatedAt
-                                        WHERE RoomId = @RoomId;";
+                               SET RoomType = @RoomType,
+                                   BaseCost = @BaseCost,
+                                   TaxPercentage = @TaxPercentage,
+                                   Status = @Status,
+                                   UpdatedAt = @UpdatedAt
+                               WHERE RoomId = UUID_TO_BIN(@RoomId);";
 
                 var parameters = new
                 {
@@ -565,6 +634,5 @@ namespace API_Hotels.Repositories
                 throw new Exception($"Error updating room with ID: {roomId}", ex);
             }
         }
-
     }
 }
